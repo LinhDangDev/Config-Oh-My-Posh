@@ -15,10 +15,6 @@
 
 While Oh My Posh works on the standard terminal, we advise using the [Windows Terminal][wt].
 
-To display all icons, we recommend the use of a [Nerd Font][fonts].
-
-When using oh-my-posh inside the WSL, make sure to follow the [Linux][linux] installation guide.
-
 <a href="ms-windows-store://pdp/?productid=XP8K0HKJFRXGCK" target="_blank">
   <img
     src={require('/img/winstore.png').default}
