@@ -7,7 +7,7 @@
 **A batteries-included PowerShell profile for Windows web developers.**  
 Ghost-text autocomplete · Git one-liners · Yarn/Node shortcuts · Docker utils · Smart `cd` · Auto-ls · Port killer · `.env` loader
 
-[![Profile](https://img.shields.io/badge/profile-1222_lines-blue?logo=powershell&logoColor=white)](./Microsoft.powershell_profile.ps1)
+[![Profile](https://img.shields.io/badge/profile-1200%2B_lines-blue?logo=powershell&logoColor=white)](./Microsoft.powershell_profile.ps1)
 [![Oh My Posh](https://img.shields.io/badge/theme-iterm2-blueviolet?logo=iterm2)](./themes/iterm2.omp.json)
 [![License](https://img.shields.io/github/license/LinhDangDev/Config-Oh-My-Posh)](./LICENSE)
 [![Windows](https://img.shields.io/badge/platform-Windows_11-0078D4?logo=windows)](.)
@@ -29,7 +29,7 @@ Ghost-text autocomplete · Git one-liners · Yarn/Node shortcuts · Docker utils
 | [Port Killer](#-utility-functions) | `kp 3000` | Kill any process on a port |
 | [.env Loader](#-utility-functions) | `le` | Load `.env` into current session |
 | [Pretty ll](#-utility-functions) | `ll` | Colored list with size+date (no Mode column) |
-| [Zoxide Smart cd](#-zoxide--smart-cd) | `z vsense` | Jump to frequent dirs by partial name |
+| [Zoxide Smart cd](#-zoxide--smart-cd) | `z <keyword>` | Jump to frequent dirs by partial name |
 | [Unix helpers](#-utility-functions) | `which`, `mkcd`, `up`, `touch` | Unix-style utilities |
 | [DB / Drizzle helpers](#-drizzle--db-helpers) | `db-push`, `db-gen` | Drizzle Kit shortcuts |
 | [UTF-8 fix](#-utf-8-fix) | automatic | Fixes garbled yarn/vitest output |
@@ -107,10 +107,10 @@ Copy-Item .\Config-Oh-My-Posh\themes\iterm2.omp.json $themeDest -Force
 Pressing `Tab` shows a file/folder list with size and date **before** the menu popup:
 
 ```
-  <DIR>      2026-05-04 22:49  apps
-  <DIR>      2026-04-26 12:05  dist
-     4,0 KB  2026-04-26 12:05  package.json
-     1,3 KB  2026-05-03 22:46  eslint.config.js
+  <DIR>      2026-01-15 09:30  src
+  <DIR>      2026-01-10 14:22  public
+     4.0 KB  2026-01-15 09:30  package.json
+     1.2 KB  2026-01-12 11:05  tsconfig.json
 ```
 
 | Key | Action |
@@ -128,11 +128,12 @@ Pressing `Tab` shows a file/folder list with size and date **before** the menu p
 Every `cd` automatically shows the directory contents (Terminal-Icons style):
 
 ```powershell
-cd apps
+cd src
 #  Mode    LastWriteTime      Length  Name
 #  ----    -------------      ------  ----
-#  d----   26/04/2026  12:05          api
-#  d----   26/04/2026  12:05          web
+#  d----   15/01/2026  09:30          components
+#  d----   15/01/2026  09:30          utils
+#  -a---   15/01/2026  09:30    1024  index.ts
 
 cd ..            # go up + show ls
 cd -             # go back + show ls
@@ -162,26 +163,26 @@ cd               # go to $HOME + show ls
 ### Demo
 
 ```powershell
-# Create and switch to feature branch
-gcb feat/r2-upload-health-endpoints
-# Switched to a new branch 'feat/r2-upload-health-endpoints'
+# Create and switch to a new feature branch
+gcb feat/user-authentication
+# Switched to a new branch 'feat/user-authentication'
 
-# Check status
+# Check what changed
 gs
-# ## feat/r2-upload-health-endpoints
-#  M apps/api/src/modules/uploads/uploads-driver.ts
-#  M apps/api/src/modules/uploads/routes.ts
+# ## feat/user-authentication
+#  M src/modules/auth/auth.service.ts
+#  A src/modules/auth/strategies/jwt.strategy.ts
 
-# Pretty log
+# Pretty commit history
 glog
-# * e0c1d20  (HEAD -> feat/r2-upload-health-endpoints)  feat(uploads): add R2 driver
-# * 100b0a5  feat(cart,catalog): add health check endpoints
-# * 1d1ca86  chore(env): add R2 env vars
+# * a1b2c3d  (HEAD -> feat/user-authentication)  feat(auth): add JWT strategy
+# * 9f8e7d6  feat(auth): scaffold auth module
+# * 5c4b3a2  chore: init project
 
-# Add, commit, push in one shot
-gcp "feat(uploads): add Cloudflare R2 upload driver and health endpoint"
-# [feat/r2-upload-health-endpoints e0c1d20] feat(uploads): add Cloudflare R2 upload driver
-# -> pushed to origin/feat/r2-upload-health-endpoints
+# Stage, commit and push in one command
+gcp "feat(auth): implement login and register endpoints"
+# [feat/user-authentication a1b2c3d] feat(auth): implement login and register endpoints
+# -> pushed to origin/feat/user-authentication
 ```
 
 > **Autocorrect:** Typing `git cmt` is automatically corrected to `git commit`.
@@ -201,6 +202,15 @@ gcp "feat(uploads): add Cloudflare R2 upload driver and health endpoint"
 | `yi` | `yarn install` |
 | `nvv` | Print `node` + `yarn` versions |
 
+```powershell
+nvv
+# node v22.14.0  yarn 4.5.0
+
+yt
+#  Test Files  12 passed (12)
+#       Tests  84 passed (84)
+```
+
 ---
 
 ## 🐳 Docker Helpers
@@ -211,7 +221,18 @@ gcp "feat(uploads): add Cloudflare R2 upload driver and health endpoint"
 | `dex <name>` | `docker exec -it <fuzzy-name> sh` — partial name match |
 | `dmon` | Launch `lazydocker` TUI |
 | `dl-split <c1> <c2>` | Open container logs side-by-side in new WT panes |
-| `dl-paste` | Read `docker logs` commands from clipboard, split panes |
+
+```powershell
+dps
+# NAME          STATUS    PORTS
+# my-api        Up 2h     0.0.0.0:3000->3000/tcp   <- green
+# my-postgres   Up 2h     0.0.0.0:5432->5432/tcp   <- green
+# my-redis      Exited    -                         <- red
+
+# Exec into container using partial name
+dex api
+# Runs: docker exec -it my-api sh
+```
 
 ---
 
@@ -223,19 +244,19 @@ gcp "feat(uploads): add Cloudflare R2 upload driver and health endpoint"
 
 ```powershell
 ll
-#   22 dirs  |  24 files  |  2.4 MB
+#   3 dirs  |  5 files  |  12.4 KB
 #   -----------------------------------------------------------
-#   <DIR>      2026-05-04 22:49  apps          <- cyan
-#   <DIR>      2026-04-26 12:05  dist
-#      382 B   2026-05-04 16:12  .env          <- red
-#      4.0 KB  2026-04-26 12:05  package.json  <- yellow
+#   <DIR>      2026-01-15 09:30  src          <- cyan
+#   <DIR>      2026-01-10 14:22  public
+#      1.2 KB  2026-01-12 11:05  .env         <- red
+#      4.0 KB  2026-01-15 09:30  package.json <- yellow
 ```
 
 ### `kp` — Kill a port
 
 ```powershell
-kp 3001
-# Killed PID 18432 on :3001
+kp 3000
+# Killed PID 12345 on :3000
 ```
 
 ### `le` — Load `.env` into session
@@ -243,13 +264,15 @@ kp 3001
 ```powershell
 le              # loads .env
 le .env.local   # loads a specific file
+
 $env:DATABASE_URL   # use any loaded var immediately
 ```
 
 ### `mkcd` — Create directory and `cd` into it
 
 ```powershell
-mkcd src/features/payments
+mkcd src/features/auth
+# Created + navigated in one step
 ```
 
 ### `up` — Go up N directories
@@ -279,18 +302,20 @@ c.                # current folder
 c src/index.ts    # specific file
 ```
 
-### `show-env` — List env vars with optional filter
+### `show-env` — List env vars with filter
 
 ```powershell
-show-env DATABASE
-# DATABASE_URL  postgresql://localhost:5432/vsense_dev
+show-env DB
+# DB_HOST  localhost
+# DB_PORT  5432
+# DB_NAME  myapp_dev
 ```
 
 ### `notify` — Desktop notification after long command
 
 ```powershell
 notify { yarn build }
-# Windows toast: "Task finished — Completed in 12.3s"
+# Windows toast: "Task finished — Completed in 18.4s"
 ```
 
 ### `duf` — Folder sizes (recursive)
@@ -299,8 +324,8 @@ notify { yarn build }
 duf
 # Folder         Size      Items
 # ------         ----      -----
-# apps           12.40 MB  342
 # node_modules   487.20 MB 18432
+# src            2.40 MB   342
 ```
 
 ---
@@ -321,10 +346,10 @@ duf
 # Install once:
 winget install ajeetdsouza.zoxide
 
-# Usage — jumps to the most-visited matching path:
-z vsense     # -> D:\Vsense\Vsense_Shop\Eccomere\Vsense_Shop
-z api        # -> ...\apps\api
-z docs       # -> whichever docs folder you visit most
+# After visiting dirs a few times, jump with partial name:
+z myapp      # -> C:\Users\Dev\projects\my-awesome-app
+z api        # -> ...\src\api
+z components # -> whichever components folder you visit most
 ```
 
 ---
