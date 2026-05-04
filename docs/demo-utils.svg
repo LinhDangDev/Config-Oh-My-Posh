@@ -54,13 +54,13 @@
   <text x="20"  y="152" class="prompt r5">❯</text>
   <text x="36"  y="152" class="cmd r5">dps</text>
   <text x="20"  y="168" class="cyan r6">NAME              STATUS     PORTS</text>
-  <text x="20"  y="184" class="ok r7">vsense-api        Up 3h      0.0.0.0:3001->3001/tcp</text>
-  <text x="20"  y="200" class="ok r8">vsense-postgres   Up 3h      0.0.0.0:5432->5432/tcp</text>
+  <text x="20"  y="184" class="ok r7">my-api            Up 3h      0.0.0.0:3000->3000/tcp</text>
+  <text x="20"  y="200" class="ok r8">my-postgres       Up 3h      0.0.0.0:5432->5432/tcp</text>
   <text x="20"  y="216" class="err r9">crashed-worker    Exited(1)  —</text>
 
   <!-- up -->
   <text x="20"  y="239" class="prompt r10">❯</text>
   <text x="36"  y="239" class="cmd r10">up 2</text>
-  <text x="20"  y="255" class="dim r11">D:\Vsense\Vsense_Shop\Eccomere\Vsense_Shop\apps\api\src</text>
-  <text x="20"  y="255" class="ok r12" dx="360"> → D:\Vsense\Vsense_Shop\Eccomere\Vsense_Shop</text>
+  <text x="20"  y="255" class="dim r11">C:\Users\Dev\projects\my-app\src\api\controllers</text>
+  <text x="20"  y="255" class="ok r12" dx="330"> → C:\Users\Dev\projects\my-app</text>
 </svg>

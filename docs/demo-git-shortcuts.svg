@@ -45,16 +45,16 @@
   <!-- gs -->
   <text x="20" y="60" class="prompt r1">❯</text>
   <text x="36" y="60" class="cmd r1">gs</text>
-  <text x="20" y="76" class="dim r2">## main...origin/main</text>
-  <text x="20" y="92" class="out r3"> M apps/api/src/modules/uploads/uploads-driver.ts</text>
+  <text x="20" y="76" class="dim r2">## feat/user-auth...origin/feat/user-auth</text>
+  <text x="20" y="92" class="out r3"> M src/modules/auth/auth.service.ts</text>
 
   <!-- glog -->
   <text x="20" y="115" class="prompt r4">❯</text>
   <text x="36" y="115" class="cmd r4">glog</text>
-  <text x="20" y="131" class="ok r5">* e0c1d20</text>
-  <text x="92" y="131" class="cmd r5">(HEAD → main)  feat(uploads): add R2 driver</text>
-  <text x="20" y="147" class="dim r6">* 100b0a5  feat(cart,catalog): add health check endpoints</text>
-  <text x="20" y="163" class="dim r6">* 1d1ca86  chore(env): add R2 env vars</text>
+  <text x="20" y="131" class="ok r5">* a1b2c3d</text>
+  <text x="92" y="131" class="cmd r5">(HEAD → feat/user-auth)  feat(auth): add JWT strategy</text>
+  <text x="20" y="147" class="dim r6">* 9f8e7d6  feat(auth): scaffold auth module</text>
+  <text x="20" y="163" class="dim r6">* 5c4b3a2  chore: init project structure</text>
 
   <!-- gcp -->
   <text x="20" y="186" class="prompt r7">❯</text>
