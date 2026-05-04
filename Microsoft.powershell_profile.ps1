@@ -51,8 +51,56 @@ Set-PSReadLineOption -MaximumHistoryCount 4096
 # Basic keybindings
 Set-PSReadLineKeyHandler -Key UpArrow -Function HistorySearchBackward
 Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
-Set-PSReadLineKeyHandler -Key Tab              -Function MenuComplete
-Set-PSReadLineKeyHandler -Key Shift+Tab        -Function MenuComplete
+#region Enhanced Tab Completion with Directory Info
+function Show-EnhancedCompletion {
+    param($key, $arg)
+
+    $line   = $null
+    $cursor = $null
+    [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
+
+    $word     = ($line.Substring(0, $cursor) -split '\s+')[-1].Trim('"').Trim("'")
+    $basePath = if ($word -match '^(.+[/\\])') { $Matches[1] } else { '.' }
+    $filter   = if ($word -match '[/\\]([^/\\]*)$') { $Matches[1] } else { $word }
+
+    try {
+        $items = Get-ChildItem -Path $basePath -Filter "$filter*" -ErrorAction Stop |
+                 Sort-Object { $_.PSIsContainer } -Descending |
+                 Sort-Object Name
+
+        if ($items.Count -gt 0) {
+            Write-Host ""
+            foreach ($item in $items) {
+                if ($item.PSIsContainer) {
+                    $sizeStr = "<DIR> "
+                    $color   = [ConsoleColor]::Cyan
+                } else {
+                    $bytes   = $item.Length
+                    $sizeStr = if ($bytes -ge 1MB)  { "{0,7:N1} MB" -f ($bytes/1MB) }
+                               elseif ($bytes -ge 1KB) { "{0,7:N1} KB" -f ($bytes/1KB) }
+                               else                    { "{0,7} B"    -f $bytes }
+                    $color   = switch ($item.Extension.ToLower()) {
+                        { $_ -in '.ts','.js','.tsx','.jsx' } { [ConsoleColor]::Yellow }
+                        { $_ -in '.json','.yaml','.yml'    } { [ConsoleColor]::DarkYellow }
+                        { $_ -in '.md','.txt','.log'       } { [ConsoleColor]::Gray }
+                        { $_ -in '.ps1','.psm1','.psd1'    } { [ConsoleColor]::Blue }
+                        { $_ -in '.sql'                    } { [ConsoleColor]::Magenta }
+                        default                              { [ConsoleColor]::White }
+                    }
+                }
+                $modTime = $item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")
+                Write-Host ("  {0,-9}  {1}  " -f $sizeStr, $modTime) -NoNewline -ForegroundColor DarkGray
+                Write-Host $item.Name -ForegroundColor $color
+            }
+            Write-Host ""
+        }
+    } catch { }
+
+    [Microsoft.PowerShell.PSConsoleReadLine]::MenuComplete($key, $arg)
+}
+Set-PSReadLineKeyHandler -Key Tab       -ScriptBlock { Show-EnhancedCompletion $args[0] $args[1] }
+Set-PSReadLineKeyHandler -Key Shift+Tab -Function MenuComplete
+#endregion
 Set-PSReadLineKeyHandler -Key End              -Function AcceptSuggestion
 Set-PSReadLineKeyHandler -Key Ctrl+RightArrow  -Function AcceptNextSuggestionWord
 Set-PSReadLineKeyHandler -Key F2               -Function SwitchPredictionView
@@ -1067,6 +1115,72 @@ if (Get-Command Out-GridView -ErrorAction SilentlyContinue) {
         }
     }
 }
+#endregion
+
+#region Cursor shape — I-beam when typing
+$ESC = [char]27
+[Console]::Write("$ESC[5 q")   # blinking beam cursor
+#endregion
+
+#region Pretty ls
+function ls {
+    param(
+        [string]$Path = ".",
+        [switch]$All
+    )
+    $items = if ($All) { Get-ChildItem -Path $Path -Force } else { Get-ChildItem -Path $Path }
+    $dirs  = $items | Where-Object { $_.PSIsContainer }  | Sort-Object Name
+    $files = $items | Where-Object { !$_.PSIsContainer } | Sort-Object Name
+    $total    = ($files | Measure-Object Length -Sum).Sum
+    $totalStr = if ($total -ge 1MB)  { "{0:N1} MB" -f ($total/1MB) }
+                elseif ($total -ge 1KB) { "{0:N1} KB" -f ($total/1KB) }
+                else { "$total B" }
+    Write-Host "`n  $($dirs.Count) dirs  |  $($files.Count) files  |  $totalStr total`n" -ForegroundColor DarkGray
+    foreach ($d in $dirs) {
+        $sub = (Get-ChildItem $d.FullName -ErrorAction SilentlyContinue).Count
+        Write-Host ("  {0,-42} {1,4} items  {2}" -f ("[DIR] " + $d.Name), $sub, $d.LastWriteTime.ToString("yyyy-MM-dd")) -ForegroundColor Cyan
+    }
+    foreach ($f in $files) {
+        $sz = if ($f.Length -ge 1MB)  { "{0,7:N1} MB" -f ($f.Length/1MB) }
+              elseif ($f.Length -ge 1KB) { "{0,7:N1} KB" -f ($f.Length/1KB) }
+              else { "{0,7} B" -f $f.Length }
+        $color = switch ($f.Extension.ToLower()) {
+            { $_ -in '.ts','.tsx','.js','.jsx' } { 'Yellow' }
+            { $_ -in '.json','.yaml','.yml'    } { 'DarkYellow' }
+            { $_ -in '.md','.txt'              } { 'Gray' }
+            { $_ -in '.ps1','.psm1'            } { 'Blue' }
+            { $_ -in '.sql'                    } { 'Magenta' }
+            { $_ -in '.env','.env.local'       } { 'Red' }
+            default                              { 'White' }
+        }
+        Write-Host ("  {0,-42} {1}  {2}" -f $f.Name, $sz, $f.LastWriteTime.ToString("yyyy-MM-dd")) -ForegroundColor $color
+    }
+    Write-Host ""
+}
+Set-Alias -Name ll -Value ls
+#endregion
+
+#region Extras
+function duf {
+    param([string]$Path = ".")
+    Get-ChildItem $Path -Directory | ForEach-Object {
+        $size    = (Get-ChildItem $_.FullName -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum
+        $sizeStr = if ($size -ge 1GB)  { "{0:N2} GB" -f ($size/1GB) }
+                   elseif ($size -ge 1MB) { "{0:N2} MB" -f ($size/1MB) }
+                   else { "{0:N1} KB" -f ($size/1KB) }
+        $items = (Get-ChildItem $_.FullName -Recurse -ErrorAction SilentlyContinue).Count
+        [PSCustomObject]@{ Folder = $_.Name; Size = $sizeStr; Items = $items }
+    } | Sort-Object Folder | Format-Table -AutoSize
+}
+
+function node-version { node -v; npm -v 2>$null; yarn -v 2>$null }
+Set-Alias -Name nv -Value node-version
+
+function Update-WindowTitle {
+    $short = $PWD.Path -replace [regex]::Escape($HOME), "~"
+    $host.UI.RawUI.WindowTitle = "pwsh · $short"
+}
+Update-WindowTitle
 #endregion
 
 #endregion Terminal quality-of-life add-ons
