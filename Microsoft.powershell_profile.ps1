@@ -51,9 +51,10 @@ Set-PSReadLineOption -MaximumHistoryCount 4096
 # Basic keybindings
 Set-PSReadLineKeyHandler -Key UpArrow -Function HistorySearchBackward
 Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
-Set-PSReadLineKeyHandler -Key Tab              -Function AcceptSuggestion
-Set-PSReadLineKeyHandler -Key Ctrl+Spacebar    -Function MenuComplete
+Set-PSReadLineKeyHandler -Key Tab              -Function MenuComplete
 Set-PSReadLineKeyHandler -Key Shift+Tab        -Function MenuComplete
+Set-PSReadLineKeyHandler -Key End              -Function AcceptSuggestion
+Set-PSReadLineKeyHandler -Key Ctrl+RightArrow  -Function AcceptNextSuggestionWord
 Set-PSReadLineKeyHandler -Key F2               -Function SwitchPredictionView
 
 # This key handler shows the entire or filtered history using Out-GridView. The
@@ -886,3 +887,186 @@ Set-Alias -Name le -Value load-env
 function c.   { code . }
 function c    { if ($Args.Count -eq 0) { code . } else { code @Args } }
 #endregion
+
+
+#region Terminal quality-of-life add-ons
+
+# Richer PSReadLine colors + better prediction
+Set-PSReadLineOption -Colors @{
+    Command   = 'Cyan'
+    Parameter = 'DarkGray'
+    String    = 'Yellow'
+    Variable  = 'Green'
+    Error     = 'Red'
+    Comment   = 'DarkGreen'
+    Keyword   = 'Magenta'
+    Number    = 'Blue'
+    Operator  = 'Gray'
+}
+
+try {
+    Set-PSReadLineOption -PredictionSource HistoryAndPlugin
+}
+catch {
+    Set-PSReadLineOption -PredictionSource History
+}
+
+# Unix-like helpers
+function which {
+    param(
+        [Parameter(Mandatory, ValueFromRemainingArguments = $true)]
+        [string[]]$Name
+    )
+
+    foreach ($n in $Name) {
+        Get-Command $n -ErrorAction SilentlyContinue |
+            Select-Object Name, CommandType, Source, Definition
+    }
+}
+
+function mkcd {
+    param([Parameter(Mandatory)][string]$Path)
+    New-Item -ItemType Directory -Path $Path -Force | Out-Null
+    Set-Location $Path
+}
+
+function up {
+    param([int]$Levels = 1)
+    if ($Levels -lt 1) { return }
+
+    $target = ((1..$Levels | ForEach-Object { ".." }) -join [IO.Path]::DirectorySeparatorChar)
+    Set-Location $target
+}
+
+function touch {
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (Test-Path $Path) {
+        (Get-Item $Path).LastWriteTime = Get-Date
+        return
+    }
+
+    $parent = Split-Path -Parent $Path
+    if ($parent -and -not (Test-Path $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+
+    New-Item -ItemType File -Path $Path -Force | Out-Null
+}
+
+# Notifications for long commands
+# Optional: Install-Module BurntToast -Scope CurrentUser
+function Invoke-WithNotify {
+    param(
+        [Parameter(Mandatory)][scriptblock]$ScriptBlock,
+        [string]$Title = "Task finished"
+    )
+
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $ok = $true
+
+    try {
+        & $ScriptBlock
+    }
+    catch {
+        $ok = $false
+        throw
+    }
+    finally {
+        $sw.Stop()
+        $status = if ($ok) { "Completed" } else { "Failed" }
+        $seconds = [math]::Round($sw.Elapsed.TotalSeconds, 1)
+        $message = "$status in ${seconds}s"
+
+        if (Get-Module -ListAvailable BurntToast) {
+            Import-Module BurntToast -ErrorAction SilentlyContinue
+            New-BurntToastNotification -Text $Title, $message | Out-Null
+        }
+        else {
+            [console]::Beep(1000, 180)
+            Write-Host "$Title - $message" -ForegroundColor Cyan
+        }
+    }
+}
+Set-Alias -Name notify -Value Invoke-WithNotify
+
+#region Docker helpers
+function dps {
+    $rows = docker ps --format "{{.Names}}`t{{.Status}}`t{{.Ports}}"
+
+    if (-not $rows) {
+        Write-Host "No running containers." -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host "NAME`tSTATUS`tPORTS" -ForegroundColor Cyan
+    foreach ($row in $rows) {
+        if ($row -match "Up") {
+            Write-Host $row -ForegroundColor Green
+        }
+        elseif ($row -match "Exited|Dead") {
+            Write-Host $row -ForegroundColor Red
+        }
+        else {
+            Write-Host $row -ForegroundColor DarkYellow
+        }
+    }
+}
+
+function dex {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [string]$Shell = "sh"
+    )
+
+    $container = docker ps --format "{{.Names}}" |
+        Where-Object { $_ -like "*$Name*" } |
+        Select-Object -First 1
+
+    if (-not $container) {
+        Write-Host "No running container matching '$Name'" -ForegroundColor Red
+        return
+    }
+
+    docker exec -it $container $Shell
+}
+#endregion
+
+#region Nest / Node / env helpers
+function db-push   { yarn drizzle-kit push @Args }
+function db-gen    { yarn drizzle-kit generate @Args }
+function db-studio { yarn drizzle-kit studio @Args }
+
+function show-env {
+    param([string]$Pattern = ".*")
+    Get-ChildItem Env: |
+        Where-Object { $_.Name -match $Pattern } |
+        Sort-Object Name
+}
+#endregion
+
+#region Function menu
+# Optional: F6 quick picker if Out-GridView is available
+if (Get-Command Out-GridView -ErrorAction SilentlyContinue) {
+    Set-PSReadLineKeyHandler -Key F6 `
+        -BriefDescription FunctionMenu `
+        -LongDescription "Show custom functions" `
+        -ScriptBlock {
+        $picked = Get-ChildItem function: |
+            Where-Object {
+                $_.Name -notmatch '^(cd|prompt|more|pause|help)$' -and
+                $_.Name -notlike '*:*'
+            } |
+            Sort-Object Name |
+            Select-Object Name |
+            Out-GridView -Title "Functions in profile" -PassThru
+
+        if ($picked) {
+            [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
+            [Microsoft.PowerShell.PSConsoleReadLine]::Insert($picked.Name)
+        }
+    }
+}
+#endregion
+
+#endregion Terminal quality-of-life add-ons
