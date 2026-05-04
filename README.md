@@ -5,9 +5,9 @@
 # PowerShell Profile — LinhDangDev
 
 **A batteries-included PowerShell profile for Windows web developers.**  
-Ghost-text autocomplete · Git one-liners · Yarn/Node shortcuts · Docker utils · Smart `cd` · Port killer · `.env` loader
+Ghost-text autocomplete · Git one-liners · Yarn/Node shortcuts · Docker utils · Smart `cd` · Auto-ls · Port killer · `.env` loader
 
-[![Profile](https://img.shields.io/badge/profile-1072_lines-blue?logo=powershell&logoColor=white)](./Microsoft.powershell_profile.ps1)
+[![Profile](https://img.shields.io/badge/profile-1222_lines-blue?logo=powershell&logoColor=white)](./Microsoft.powershell_profile.ps1)
 [![Oh My Posh](https://img.shields.io/badge/theme-iterm2-blueviolet?logo=iterm2)](./themes/iterm2.omp.json)
 [![License](https://img.shields.io/github/license/LinhDangDev/Config-Oh-My-Posh)](./LICENSE)
 [![Windows](https://img.shields.io/badge/platform-Windows_11-0078D4?logo=windows)](.)
@@ -18,18 +18,21 @@ Ghost-text autocomplete · Git one-liners · Yarn/Node shortcuts · Docker utils
 
 ## What's inside
 
-| Feature | Description |
-|---------|-------------|
-| [Ghost Text Autocomplete](#-autocomplete--keyboard-shortcuts) | Inline suggestions from history — `→` word, `End` full |
-| [Git Shortcuts](#-git-shortcuts) | `gs`, `glog`, `gco`, `gcp "msg"` and more |
-| [Yarn / Node Shortcuts](#-yarn--node-shortcuts) | `yd`, `yt`, `ytw`, `yb`, `yi`, `nvv` |
-| [Docker Helpers](#-docker-helpers) | `dps` colored table, `dex` fuzzy exec, `dmon` TUI |
-| [Port Killer](#-utility-functions) | `kp 3000` — kill anything on a port instantly |
-| [.env Loader](#-utility-functions) | `le` — load `.env` into current session |
-| [Zoxide Smart cd](#-zoxide--smart-cd) | `z vsense` jumps straight to your project |
-| [Unix helpers](#-utility-functions) | `which`, `mkcd`, `up`, `touch` |
-| [DB / Drizzle helpers](#-drizzle--db-helpers) | `db-push`, `db-gen`, `db-studio` |
-| [UTF-8 fix](#-utf-8-fix) | Fixes garbled output from yarn/vitest/node |
+| Feature | Command / Key | Description |
+|---------|--------------|-------------|
+| [Ghost Text Autocomplete](#-autocomplete--keyboard-shortcuts) | `End` / `→` | Inline history suggestions |
+| [Enhanced Tab](#-autocomplete--keyboard-shortcuts) | `Tab` | Shows file list with size+date before completing |
+| [Auto-ls on cd](#-auto-ls-on-cd) | `cd <path>` | Lists directory contents after every `cd` |
+| [Git Shortcuts](#-git-shortcuts) | `gs`, `glog`, `gco`, `gcp` | Common git ops in 2-3 chars |
+| [Yarn / Node Shortcuts](#-yarn--node-shortcuts) | `yd`, `yt`, `yb` | Dev/test/build shortcuts |
+| [Docker Helpers](#-docker-helpers) | `dps`, `dex`, `dmon` | Colored status, fuzzy exec, TUI |
+| [Port Killer](#-utility-functions) | `kp 3000` | Kill any process on a port |
+| [.env Loader](#-utility-functions) | `le` | Load `.env` into current session |
+| [Pretty ll](#-utility-functions) | `ll` | Colored list with size+date (no Mode column) |
+| [Zoxide Smart cd](#-zoxide--smart-cd) | `z vsense` | Jump to frequent dirs by partial name |
+| [Unix helpers](#-utility-functions) | `which`, `mkcd`, `up`, `touch` | Unix-style utilities |
+| [DB / Drizzle helpers](#-drizzle--db-helpers) | `db-push`, `db-gen` | Drizzle Kit shortcuts |
+| [UTF-8 fix](#-utf-8-fix) | automatic | Fixes garbled yarn/vitest output |
 
 ---
 
@@ -89,19 +92,52 @@ Copy-Item .\Config-Oh-My-Posh\themes\iterm2.omp.json $themeDest -Force
 
 ![Autocomplete demo](./docs/demo-autocomplete.svg)
 
+### Ghost Text
+
 | Key | Action |
 |-----|--------|
 | `→` at end of line | Accept **next word** of ghost suggestion |
 | `End` | Accept **entire** ghost suggestion |
 | `Ctrl+→` | Accept next suggestion word |
-| `Tab` / `Shift+Tab` | Cycle file / folder completions |
 | `F2` | Toggle **ghost text** ↔ **list view** history |
-| `F6` | Open function picker (Out-GridView) |
-| `F7` | Open command history picker |
 | `↑` / `↓` | Search history by current prefix |
+
+### Tab — Enhanced Completion
+
+Pressing `Tab` shows a file/folder list with size and date **before** the menu popup:
+
+```
+  <DIR>      2026-05-04 22:49  apps
+  <DIR>      2026-04-26 12:05  dist
+     4,0 KB  2026-04-26 12:05  package.json
+     1,3 KB  2026-05-03 22:46  eslint.config.js
+```
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Show list + cycle file/folder completions |
+| `Shift+Tab` | MenuComplete (no list) |
+| `F6` | Function picker (Out-GridView) |
+| `F7` | Command history picker |
 | `Alt+w` | Save line to history without executing |
 
-PSReadLine color scheme — Commands `cyan`, strings `yellow`, variables `green`, errors `red`.
+---
+
+## 📂 Auto-ls on cd
+
+Every `cd` automatically shows the directory contents (Terminal-Icons style):
+
+```powershell
+cd apps
+#  Mode    LastWriteTime      Length  Name
+#  ----    -------------      ------  ----
+#  d----   26/04/2026  12:05          api
+#  d----   26/04/2026  12:05          web
+
+cd ..            # go up + show ls
+cd -             # go back + show ls
+cd               # go to $HOME + show ls
+```
 
 ---
 
@@ -121,7 +157,32 @@ PSReadLine color scheme — Commands `cyan`, strings `yellow`, variables `green`
 | `gpl` | `git pull --rebase` |
 | `gst` | `git stash` |
 | `gsp` | `git stash pop` |
-| `gcp "message"` | `git add -A && git commit -m "…" && git push` |
+| `gcp "message"` | `git add -A && git commit -m "..." && git push` |
+
+### Demo
+
+```powershell
+# Create and switch to feature branch
+gcb feat/r2-upload-health-endpoints
+# Switched to a new branch 'feat/r2-upload-health-endpoints'
+
+# Check status
+gs
+# ## feat/r2-upload-health-endpoints
+#  M apps/api/src/modules/uploads/uploads-driver.ts
+#  M apps/api/src/modules/uploads/routes.ts
+
+# Pretty log
+glog
+# * e0c1d20  (HEAD -> feat/r2-upload-health-endpoints)  feat(uploads): add R2 driver
+# * 100b0a5  feat(cart,catalog): add health check endpoints
+# * 1d1ca86  chore(env): add R2 env vars
+
+# Add, commit, push in one shot
+gcp "feat(uploads): add Cloudflare R2 upload driver and health endpoint"
+# [feat/r2-upload-health-endpoints e0c1d20] feat(uploads): add Cloudflare R2 upload driver
+# -> pushed to origin/feat/r2-upload-health-endpoints
+```
 
 > **Autocorrect:** Typing `git cmt` is automatically corrected to `git commit`.
 
@@ -158,6 +219,18 @@ PSReadLine color scheme — Commands `cyan`, strings `yellow`, variables `green`
 
 ![Utilities demo](./docs/demo-utils.svg)
 
+### `ll` — Pretty directory listing (no Mode column)
+
+```powershell
+ll
+#   22 dirs  |  24 files  |  2.4 MB
+#   -----------------------------------------------------------
+#   <DIR>      2026-05-04 22:49  apps          <- cyan
+#   <DIR>      2026-04-26 12:05  dist
+#      382 B   2026-05-04 16:12  .env          <- red
+#      4.0 KB  2026-04-26 12:05  package.json  <- yellow
+```
+
 ### `kp` — Kill a port
 
 ```powershell
@@ -177,7 +250,6 @@ $env:DATABASE_URL   # use any loaded var immediately
 
 ```powershell
 mkcd src/features/payments
-# dir created + navigated in one step
 ```
 
 ### `up` — Go up N directories
@@ -190,22 +262,21 @@ up 3    # go up 3 levels at once
 ### `touch` — Create file (Unix-style)
 
 ```powershell
-touch src/utils/helpers.ts   # creates file (or updates timestamp)
+touch src/utils/helpers.ts
 ```
 
 ### `which` — Locate a command
 
 ```powershell
 which node
-# Name  CommandType  Source
 # node  Application  C:\Program Files\nodejs\node.exe
 ```
 
 ### `c.` — Open VS Code
 
 ```powershell
-c.                # open VS Code in current folder
-c src/index.ts    # open a specific file
+c.                # current folder
+c src/index.ts    # specific file
 ```
 
 ### `show-env` — List env vars with optional filter
@@ -219,8 +290,17 @@ show-env DATABASE
 
 ```powershell
 notify { yarn build }
-# ... build runs ...
 # Windows toast: "Task finished — Completed in 12.3s"
+```
+
+### `duf` — Folder sizes (recursive)
+
+```powershell
+duf
+# Folder         Size      Items
+# ------         ----      -----
+# apps           12.40 MB  342
+# node_modules   487.20 MB 18432
 ```
 
 ---
@@ -252,8 +332,6 @@ z docs       # -> whichever docs folder you visit most
 ## 🔤 UTF-8 Fix
 
 Fixes garbled output (`Γ£ô` -> `✓`) from `yarn`, `vitest`, `node` on Windows.
-
-Added at the very top of the profile:
 
 ```powershell
 [Console]::InputEncoding  = [System.Text.Encoding]::UTF8

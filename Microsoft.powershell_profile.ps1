@@ -936,6 +936,24 @@ function c.   { code . }
 function c    { if ($Args.Count -eq 0) { code . } else { code @Args } }
 #endregion
 
+#region Auto-ls after cd
+function Invoke-SetLocationWithList {
+    param(
+        [Parameter(Position = 0)]
+        [string]$Path
+    )
+    if (-not $PSBoundParameters.ContainsKey('Path')) {
+        Set-Location $HOME
+    } elseif ($Path -eq '-') {
+        Set-Location -
+    } else {
+        Set-Location $Path
+    }
+    Get-ChildItem
+}
+Set-Alias -Name cd -Value Invoke-SetLocationWithList -Option AllScope -Force
+#endregion
+
 
 #region Terminal quality-of-life add-ons
 
@@ -1122,42 +1140,60 @@ $ESC = [char]27
 [Console]::Write("$ESC[5 q")   # blinking beam cursor
 #endregion
 
-#region Pretty ls
-function ls {
+#region Pretty ll (ls giu nguyen mac dinh)
+function Invoke-PrettyLs {
     param(
         [string]$Path = ".",
-        [switch]$All
+        [switch]$All,
+        [switch]$NoSummary
     )
-    $items = if ($All) { Get-ChildItem -Path $Path -Force } else { Get-ChildItem -Path $Path }
-    $dirs  = $items | Where-Object { $_.PSIsContainer }  | Sort-Object Name
-    $files = $items | Where-Object { !$_.PSIsContainer } | Sort-Object Name
-    $total    = ($files | Measure-Object Length -Sum).Sum
-    $totalStr = if ($total -ge 1MB)  { "{0:N1} MB" -f ($total/1MB) }
+    $gciArgs = @{ Path = $Path; ErrorAction = 'Stop' }
+    if ($All) { $gciArgs['Force'] = $true }
+    try { $items = Get-ChildItem @gciArgs } catch { Get-ChildItem -Path $Path; return }
+
+    $dirs  = @($items | Where-Object { $_.PSIsContainer }  | Sort-Object Name)
+    $files = @($items | Where-Object { !$_.PSIsContainer } | Sort-Object Name)
+    $total = ($files | Measure-Object Length -Sum).Sum
+    $totalStr = if ($total -ge 1GB)  { "{0:N2} GB" -f ($total/1GB) }
+                elseif ($total -ge 1MB) { "{0:N1} MB" -f ($total/1MB) }
                 elseif ($total -ge 1KB) { "{0:N1} KB" -f ($total/1KB) }
                 else { "$total B" }
-    Write-Host "`n  $($dirs.Count) dirs  |  $($files.Count) files  |  $totalStr total`n" -ForegroundColor DarkGray
-    foreach ($d in $dirs) {
-        $sub = (Get-ChildItem $d.FullName -ErrorAction SilentlyContinue).Count
-        Write-Host ("  {0,-42} {1,4} items  {2}" -f ("[DIR] " + $d.Name), $sub, $d.LastWriteTime.ToString("yyyy-MM-dd")) -ForegroundColor Cyan
+
+    if (-not $NoSummary) {
+        Write-Host ""
+        Write-Host ("  {0}  |  {1} files  |  {2}" -f "$($dirs.Count) dirs", $files.Count, $totalStr) -ForegroundColor DarkGray
+        Write-Host ("  " + ("─" * 60)) -ForegroundColor DarkGray
     }
+
+    foreach ($d in $dirs) {
+        $ts = $d.LastWriteTime.ToString("yyyy-MM-dd HH:mm")
+        Write-Host ("  {0,-9}  {1}  " -f "<DIR>", $ts) -NoNewline -ForegroundColor DarkGray
+        Write-Host $d.Name -ForegroundColor Cyan
+    }
+
     foreach ($f in $files) {
-        $sz = if ($f.Length -ge 1MB)  { "{0,7:N1} MB" -f ($f.Length/1MB) }
-              elseif ($f.Length -ge 1KB) { "{0,7:N1} KB" -f ($f.Length/1KB) }
-              else { "{0,7} B" -f $f.Length }
+        $bytes = $f.Length
+        $sz = if ($bytes -ge 1GB)  { "{0,8:N2} GB" -f ($bytes/1GB) }
+              elseif ($bytes -ge 1MB) { "{0,8:N1} MB" -f ($bytes/1MB) }
+              elseif ($bytes -ge 1KB) { "{0,8:N1} KB" -f ($bytes/1KB) }
+              else                    { "{0,8} B"    -f $bytes }
+        $ts    = $f.LastWriteTime.ToString("yyyy-MM-dd HH:mm")
         $color = switch ($f.Extension.ToLower()) {
             { $_ -in '.ts','.tsx','.js','.jsx' } { 'Yellow' }
             { $_ -in '.json','.yaml','.yml'    } { 'DarkYellow' }
-            { $_ -in '.md','.txt'              } { 'Gray' }
-            { $_ -in '.ps1','.psm1'            } { 'Blue' }
+            { $_ -in '.md','.txt','.log'       } { 'Gray' }
+            { $_ -in '.ps1','.psm1','.psd1'    } { 'Blue' }
             { $_ -in '.sql'                    } { 'Magenta' }
             { $_ -in '.env','.env.local'       } { 'Red' }
+            { $_ -in '.png','.jpg','.svg','.ico' } { 'DarkCyan' }
             default                              { 'White' }
         }
-        Write-Host ("  {0,-42} {1}  {2}" -f $f.Name, $sz, $f.LastWriteTime.ToString("yyyy-MM-dd")) -ForegroundColor $color
+        Write-Host ("  {0}  {1}  " -f $sz, $ts) -NoNewline -ForegroundColor DarkGray
+        Write-Host $f.Name -ForegroundColor $color
     }
     Write-Host ""
 }
-Set-Alias -Name ll -Value ls
+Set-Alias -Name ll -Value Invoke-PrettyLs -Force
 #endregion
 
 #region Extras
@@ -1174,7 +1210,7 @@ function duf {
 }
 
 function node-version { node -v; npm -v 2>$null; yarn -v 2>$null }
-Set-Alias -Name nv -Value node-version
+Set-Alias -Name nv -Value node-version -Force
 
 function Update-WindowTitle {
     $short = $PWD.Path -replace [regex]::Escape($HOME), "~"
