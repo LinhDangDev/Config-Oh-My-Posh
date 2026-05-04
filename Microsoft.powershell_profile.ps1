@@ -1,50 +1,60 @@
 using namespace System.Management.Automation
 using namespace System.Management.Automation.Language
 
+# UTF-8 encoding — fixes garbled Unicode in yarn/vitest/node output
+[Console]::InputEncoding  = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding           = [System.Text.Encoding]::UTF8
+chcp 65001 | Out-Null
+$env:LANG        = "en_US.UTF-8"
+$env:PYTHONUTF8  = "1"
+
+# Initialize basic modules
 if ($host.Name -eq 'ConsoleHost') {
     Import-Module PSReadLine
 }
-
-
 Import-Module -Name Terminal-Icons
 
-oh-my-posh init pwsh --config C:\Users\Dev\AppData\Local\Programs\oh-my-posh\themes\atomic.omp.json | Invoke-Expression
+# Initialize oh-my-posh
+if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
+    oh-my-posh init pwsh --config "C:\Users\Dev\AppData\Local\Programs\oh-my-posh\themes\iterm2.omp.json" | Invoke-Expression
+}
 
-
+# Argument completers for common tools
 Register-ArgumentCompleter -Native -CommandName winget -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
     [Console]::InputEncoding = [Console]::OutputEncoding = $OutputEncoding = [System.Text.Utf8Encoding]::new()
     $Local:word = $wordToComplete.Replace('"', '""')
     $Local:ast = $commandAst.ToString().Replace('"', '""')
     winget complete --word="$Local:word" --commandline "$Local:ast" --position $cursorPosition | ForEach-Object {
-        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+        [CompletionResult]::new($_, $_, 'ParameterValue', $_)
     }
 }
 
-# PowerShell parameter completion shim for the dotnet CLI
+# PowerShell parameter completion for dotnet
 Register-ArgumentCompleter -Native -CommandName dotnet -ScriptBlock {
     param($commandName, $wordToComplete, $cursorPosition)
     dotnet complete --position $cursorPosition "$wordToComplete" | ForEach-Object {
-        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+        [CompletionResult]::new($_, $_, 'ParameterValue', $_)
     }
 }
 
-# ---
+# PSReadLine configuration
+if (-not [Console]::IsOutputRedirected) {
+    Set-PSReadLineOption -PredictionSource History
+    Set-PSReadLineOption -PredictionViewStyle InlineView
+}
+Set-PSReadLineOption -EditMode Windows
+Set-PSReadLineOption -HistorySaveStyle SaveIncrementally
+Set-PSReadLineOption -MaximumHistoryCount 4096
 
-
-# This is an example profile for PSReadLine.
-#
-# This is roughly what I use so there is some emphasis on emacs bindings,
-# but most of these bindings make sense in Windows mode as well.
-
-# Searching for commands with up/down arrow is really handy.  The
-# option "moves to end" is useful if you want the cursor at the end
-# of the line while cycling through history like it does w/o searching,
-# without that option, the cursor will remain at the position it was
-# when you used up arrow, which can be useful if you forget the exact
-# string you started the search on.
+# Basic keybindings
 Set-PSReadLineKeyHandler -Key UpArrow -Function HistorySearchBackward
 Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
+Set-PSReadLineKeyHandler -Key Tab              -Function AcceptSuggestion
+Set-PSReadLineKeyHandler -Key Ctrl+Spacebar    -Function MenuComplete
+Set-PSReadLineKeyHandler -Key Shift+Tab        -Function MenuComplete
+Set-PSReadLineKeyHandler -Key F2               -Function SwitchPredictionView
 
 # This key handler shows the entire or filtered history using Out-GridView. The
 # typed text is used as the substring pattern for filtering. A selected command
@@ -94,7 +104,6 @@ Set-PSReadLineKeyHandler -Key F7 `
         [Microsoft.PowerShell.PSConsoleReadLine]::Insert(($command -join "`n"))
     }
 }
-
 
 # CaptureScreen is good for blog posts or email showing a transaction
 # of what you did when asking for help or demonstrating a technique.
@@ -199,7 +208,7 @@ Set-PSReadLineKeyHandler -Key '"', "'" `
 
     # If cursor is at the start of a token, enclose it in quotes.
     if ($token.Extent.StartOffset -eq $cursor) {
-        if ($token.Kind -eq [TokenKind]::Generic -or $token.Kind -eq [TokenKind]::Identifier -or 
+        if ($token.Kind -eq [TokenKind]::Generic -or $token.Kind -eq [TokenKind]::Identifier -or
             $token.Kind -eq [TokenKind]::Variable -or $token.TokenFlags.hasFlag([TokenFlags]::Keyword)) {
             $end = $token.Extent.EndOffset
             $len = $end - $cursor
@@ -232,7 +241,7 @@ Set-PSReadLineKeyHandler -Key '(', '{', '[' `
     $line = $null
     $cursor = $null
     [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
-    
+
     if ($selectionStart -ne -1) {
         # Text is selected, wrap it in brackets
         [Microsoft.PowerShell.PSConsoleReadLine]::Replace($selectionStart, $selectionLength, $key.KeyChar + $line.SubString($selectionStart, $selectionLength) + $closeChar)
@@ -484,7 +493,6 @@ Set-PSReadLineKeyHandler -Key F1 `
     }
 }
 
-
 #
 # Ctrl+Shift+j then type a key to mark the current directory.
 # Ctrj+j then the same key will change back to that directory without
@@ -569,28 +577,28 @@ Set-PSReadLineKeyHandler -Key RightArrow `
 
 # Cycle through arguments on current line and select the text. This makes it easier to quickly change the argument if re-running a previously run command from the history
 # or if using a psreadline predictor. You can also use a digit argument to specify which argument you want to select, i.e. Alt+1, Alt+a selects the first argument
-# on the command line. 
+# on the command line.
 Set-PSReadLineKeyHandler -Key Alt+a `
     -BriefDescription SelectCommandArguments `
     -LongDescription "Set current selection to next command argument in the command line. Use of digit argument selects argument by position" `
     -ScriptBlock {
     param($key, $arg)
-  
+
     $ast = $null
     $cursor = $null
     [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$ast, [ref]$null, [ref]$null, [ref]$cursor)
-  
+
     $asts = $ast.FindAll( {
             $args[0] -is [System.Management.Automation.Language.ExpressionAst] -and
             $args[0].Parent -is [System.Management.Automation.Language.CommandAst] -and
             $args[0].Extent.StartOffset -ne $args[0].Parent.Extent.StartOffset
         }, $true)
-  
+
     if ($asts.Count -eq 0) {
         [Microsoft.PowerShell.PSConsoleReadLine]::Ding()
         return
     }
-    
+
     $nextAst = $null
 
     if ($null -ne $arg) {
@@ -602,8 +610,8 @@ Set-PSReadLineKeyHandler -Key Alt+a `
                 $nextAst = $ast
                 break
             }
-        } 
-        
+        }
+
         if ($null -eq $nextAst) {
             $nextAst = $asts[0]
         }
@@ -617,17 +625,11 @@ Set-PSReadLineKeyHandler -Key Alt+a `
         $startOffsetAdjustment = 1
         $endOffsetAdjustment = 2
     }
-  
+
     [Microsoft.PowerShell.PSConsoleReadLine]::SetCursorPosition($nextAst.Extent.StartOffset + $startOffsetAdjustment)
     [Microsoft.PowerShell.PSConsoleReadLine]::SetMark($null, $null)
     [Microsoft.PowerShell.PSConsoleReadLine]::SelectForwardChar($null, ($nextAst.Extent.EndOffset - $nextAst.Extent.StartOffset) - $endOffsetAdjustment)
 }
-
-
-Set-PSReadLineOption -PredictionSource History
-Set-PSReadLineOption -PredictionViewStyle ListView
-Set-PSReadLineOption -EditMode Windows
-
 
 # This is an example of a macro that you might use to execute a command.
 # This will add the command to history.
@@ -641,10 +643,246 @@ Set-PSReadLineKeyHandler -Key Ctrl+Shift+b `
 }
 
 Set-PSReadLineKeyHandler -Key Ctrl+Shift+t `
-    -BriefDescription BuildCurrentDirectory `
-    -LongDescription "Build the current directory" `
+    -BriefDescription TestCurrentDirectory `
+    -LongDescription "Test the current directory" `
     -ScriptBlock {
     [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
     [Microsoft.PowerShell.PSConsoleReadLine]::Insert("dotnet test")
     [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine()
 }
+$WarningPreference = "SilentlyContinue"
+
+$script:ClaudeExternalCommand = (Get-Command claude -CommandType ExternalScript -ErrorAction SilentlyContinue).Source
+
+function claude {
+    param(
+        [Parameter(ValueFromRemainingArguments = $true)]
+        [object[]]$Arguments
+    )
+
+    if (-not $script:ClaudeExternalCommand) {
+        throw "Unable to resolve the external Claude command."
+    }
+
+    try {
+        Clear-Host
+    }
+    catch {
+    }
+
+    & $script:ClaudeExternalCommand @Arguments
+}
+
+#region Docker Logs Split Pane
+function docker-logs-split {
+    param(
+        [Parameter(Mandatory = $true, ValueFromRemainingArguments = $true)]
+        [string[]]$Containers,
+        [switch]$Follow = $true,
+        [ValidateSet("grid","horizontal","vertical")]
+        [string]$Layout = "horizontal"
+    )
+    if ($Containers.Count -eq 0) {
+        Write-Host "Usage: dl-split <c1> <c2> ... [-Layout grid|horizontal|vertical]"
+        return
+    }
+
+    $running = @(docker ps --format "{{.Names}}" 2>$null)
+    $resolved = @()
+    foreach ($name in $Containers) {
+        if ($running -contains $name) { $resolved += $name; continue }
+        $found = @($running | Where-Object { $_ -like "*$name*" })
+        if ($found.Count -eq 1) {
+            Write-Host "Resolved '$name' -> '$($found[0])'" -ForegroundColor Cyan
+            $resolved += $found[0]
+        } elseif ($found.Count -gt 1) {
+            Write-Host "Ambiguous '$name': $($found -join ', ')" -ForegroundColor Yellow; return
+        } else {
+            Write-Host "No match '$name'. Running: $($running -join ', ')" -ForegroundColor Red; return
+        }
+    }
+
+    $f = if ($Follow) { "-f" } else { "" }
+
+    # Build wt argument list (avoids Invoke-Expression parser issues with -H/-V)
+    $args = @("-w", "0", "nt", "-d", ".", "pwsh", "-NoExit", "-Command", "docker logs $f $($resolved[0])")
+
+    function Add-Pane($arr, $splitFlag, $name) {
+        $arr += ";"; $arr += "sp"; $arr += $splitFlag; $arr += "-d"; $arr += "."
+        $arr += "pwsh"; $arr += "-NoExit"; $arr += "-Command"; $arr += "docker logs $f $name"
+        return ,$arr
+    }
+    function Add-Focus($arr, $dir) {
+        $arr += ";"; $arr += "mf"; $arr += $dir
+        return ,$arr
+    }
+
+    switch ($Layout) {
+        "horizontal" {
+            for ($i = 1; $i -lt $resolved.Count; $i++) { $args = Add-Pane $args "-H" $resolved[$i] }
+        }
+        "vertical" {
+            for ($i = 1; $i -lt $resolved.Count; $i++) { $args = Add-Pane $args "-V" $resolved[$i] }
+        }
+        "grid" {
+            if ($resolved.Count -gt 1) { $args = Add-Pane $args "-V" $resolved[1] }
+            if ($resolved.Count -gt 2) { $args = Add-Focus $args "left"; $args = Add-Pane $args "-H" $resolved[2] }
+            if ($resolved.Count -gt 3) { $args = Add-Focus $args "right"; $args = Add-Pane $args "-H" $resolved[3] }
+        }
+    }
+    & wt.exe @args
+}
+Set-Alias -Name dl-split -Value docker-logs-split
+
+function docker-logs-paste {
+    param(
+        [string]$Text = $null,
+        [switch]$Follow = $true
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        Add-Type -Assembly PresentationCore -ErrorAction SilentlyContinue
+        if (-not [System.Windows.Clipboard]::ContainsText()) {
+            Write-Host "Clipboard does not contain text."
+            return
+        }
+        $Text = [System.Windows.Clipboard]::GetText()
+    }
+
+    # Detect docker logs / docker compose logs lines
+    $lines = $Text -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -match "docker\s+(logs|compose\s+logs)" }
+
+    if ($lines.Count -eq 0) {
+        Write-Host "No docker logs commands found in input."
+        return
+    }
+
+    $followFlag = if ($Follow) { "-f" } else { "" }
+
+    # Extract container names / service names from the commands
+    $containers = @()
+    foreach ($line in $lines) {
+        $clean = $line -replace '^docker\s+(logs|compose\s+logs)\s+(-f\s+)?', ''
+        $clean = $clean -replace 'docker\s+compose\s+(-f\s+)?\s*logs\s*', ''
+        $clean = $clean.Trim()
+        if ($clean -and -not [string]::IsNullOrWhiteSpace($clean)) {
+            $containers += $clean
+        }
+    }
+
+    if ($containers.Count -eq 0) {
+        Write-Host "Could not extract container names from pasted commands."
+        return
+    }
+
+    # Resolve pasted container names with fuzzy matching
+    $running = docker ps --format "{{.Names}}" 2>$null
+    $resolved = @()
+    foreach ($c in $containers) {
+        if ($c -in $running) { $resolved += $c; continue }
+        $m = $running | Where-Object { $_ -like "*$c*" }
+        if ($m.Count -eq 1) { $resolved += $m[0] }
+        elseif ($m.Count -gt 1) { Write-Host "Ambiguous '$c': $($m -join ', ')" -ForegroundColor Yellow }
+        else { Write-Host "No match for '$c'" -ForegroundColor Red }
+    }
+    if ($resolved.Count -eq 0) {
+        Write-Host "No valid containers to show." -ForegroundColor Red
+        return
+    }
+
+    $wtArgs = @("-w", "0", "nt", "-d", ".", "pwsh", "-NoExit", "-Command", "docker logs $followFlag $($resolved[0])")
+    for ($i = 1; $i -lt $resolved.Count; $i++) {
+        $wtArgs += ";"
+        $wtArgs += "sp"
+        $wtArgs += "-d"
+        $wtArgs += "."
+        $wtArgs += "pwsh"
+        $wtArgs += "-NoExit"
+        $wtArgs += "-Command"
+        $cmd = "docker logs $followFlag $($resolved[$i])"
+        Start-Process wt -ArgumentList "-w", "0", "sp", "-H", "-d", ".", "pwsh", "-NoExit", "-Command", $cmd
+        Start-Sleep -Milliseconds 300
+    }
+}
+Set-Alias -Name dl-paste -Value docker-logs-paste
+
+# Docker monitor TUI (requires: winget install JesseDuffield.lazydocker)
+function dmon {
+    if (-not (Get-Command lazydocker -ErrorAction SilentlyContinue)) {
+        Write-Host "lazydocker not installed. Run: winget install JesseDuffield.lazydocker" -ForegroundColor Yellow
+        return
+    }
+    lazydocker
+}
+#endregion
+
+#region Git shortcuts
+function gs    { git status -sb }
+function glog  { git log --oneline --graph --decorate -20 }
+function gco   { git checkout @Args }
+function gcb   { git checkout -b @Args }
+function gaa   { git add -A }
+function gst   { git stash @Args }
+function gsp   { git stash pop }
+function gd    { git diff @Args }
+function gp    { git push @Args }
+function gpl   { git pull --rebase @Args }
+function gcp {
+    param([Parameter(Mandatory)][string]$Message)
+    git add -A; git commit -m $Message; git push
+}
+#endregion
+
+#region Yarn / Node shortcuts
+function yd    { yarn dev @Args }
+function yda   { yarn dev:api @Args }
+function ydw   { yarn dev:web @Args }
+function yt    { yarn test @Args }
+function ytw   { yarn test --watch @Args }
+function yb    { yarn build @Args }
+function yi    { yarn install }
+function nvv   { Write-Host "node $(node -v)  yarn $(yarn -v)" }
+#endregion
+
+#region Zoxide (smart cd) — install: winget install ajeetdsouza.zoxide
+if (Get-Command zoxide -ErrorAction SilentlyContinue) {
+    Invoke-Expression (& { (zoxide init powershell | Out-String) })
+} else {
+    Write-Host "Tip: install zoxide for smart cd -> winget install ajeetdsouza.zoxide" -ForegroundColor DarkGray
+}
+#endregion
+
+#region Port killer
+function kill-port {
+    param([Parameter(Mandatory)][int]$Port)
+    $pids = netstat -ano | Select-String ":$Port\s" |
+        ForEach-Object { ($_ -split '\s+')[-1] } | Sort-Object -Unique
+    if (-not $pids) { Write-Host "Nothing on :$Port" -ForegroundColor Yellow; return }
+    foreach ($id in $pids) {
+        Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
+        Write-Host "Killed PID $id on :$Port" -ForegroundColor Green
+    }
+}
+Set-Alias -Name kp -Value kill-port
+#endregion
+
+#region .env loader
+function load-env {
+    param([string]$File = ".env")
+    if (-not (Test-Path $File)) { Write-Host "$File not found" -ForegroundColor Red; return }
+    $count = 0
+    Get-Content $File | Where-Object { $_ -match '^\s*[^#=\s]' -and $_ -match '=' } | ForEach-Object {
+        $k, $v = $_ -split '=', 2
+        $k = $k.Trim(); $v = $v.Trim().Trim('"').Trim("'")
+        [System.Environment]::SetEnvironmentVariable($k, $v, 'Process')
+        $count++
+    }
+    Write-Host "Loaded $count vars from $File" -ForegroundColor Green
+}
+Set-Alias -Name le -Value load-env
+#endregion
+
+#region VS Code shortcuts
+function c.   { code . }
+function c    { if ($Args.Count -eq 0) { code . } else { code @Args } }
+#endregion
