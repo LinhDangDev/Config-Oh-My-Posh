@@ -4,13 +4,14 @@
 
 # PowerShell Profile — LinhDangDev
 
-**A batteries-included PowerShell profile for Windows web developers.**  
+**A batteries-included PowerShell profile for Windows web developers.**
 Ghost-text autocomplete · Git one-liners · Yarn/Node shortcuts · Docker utils · Smart `cd` · Auto-ls · Port killer · `.env` loader
 
 [![Profile](https://img.shields.io/badge/profile-1200%2B_lines-blue?logo=powershell&logoColor=white)](./Microsoft.powershell_profile.ps1)
 [![Oh My Posh](https://img.shields.io/badge/theme-iterm2-blueviolet?logo=iterm2)](./themes/iterm2.omp.json)
 [![License](https://img.shields.io/github/license/LinhDangDev/Config-Oh-My-Posh)](./LICENSE)
 [![Windows](https://img.shields.io/badge/platform-Windows_11-0078D4?logo=windows)](.)
+[![Installer](https://img.shields.io/badge/installer-v0.0.1-orange?logo=powershell)](./Install-Profile.ps1)
 
 </div>
 
@@ -33,6 +34,27 @@ Ghost-text autocomplete · Git one-liners · Yarn/Node shortcuts · Docker utils
 | [Unix helpers](#-utility-functions) | `which`, `mkcd`, `up`, `touch` | Unix-style utilities |
 | [DB / Drizzle helpers](#-drizzle--db-helpers) | `db-push`, `db-gen` | Drizzle Kit shortcuts |
 | [UTF-8 fix](#-utf-8-fix) | automatic | Fixes garbled yarn/vitest output |
+
+---
+
+## 🚀 Quick Install (Recommended)
+
+![Installer demo](./docs/demo-install.svg)
+
+Clone the repo and run the interactive installer — it detects what's already installed, lets you pick components, then installs only what's missing:
+
+```powershell
+git clone https://github.com/LinhDangDev/Config-Oh-My-Posh.git
+cd Config-Oh-My-Posh
+
+# Interactive menu (↑↓ navigate · SPACE toggle · ENTER install)
+.\Install-Profile.ps1
+
+# Or install everything with no prompts:
+.\Install-Profile.ps1 --all
+```
+
+> **First-time setup?** Use `.\Install-Profile.ps1` — it handles everything below automatically.
 
 ---
 
