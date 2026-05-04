@@ -51,56 +51,8 @@ Set-PSReadLineOption -MaximumHistoryCount 4096
 # Basic keybindings
 Set-PSReadLineKeyHandler -Key UpArrow -Function HistorySearchBackward
 Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward
-#region Enhanced Tab Completion with Directory Info
-function Show-EnhancedCompletion {
-    param($key, $arg)
-
-    $line   = $null
-    $cursor = $null
-    [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$cursor)
-
-    $word     = ($line.Substring(0, $cursor) -split '\s+')[-1].Trim('"').Trim("'")
-    $basePath = if ($word -match '^(.+[/\\])') { $Matches[1] } else { '.' }
-    $filter   = if ($word -match '[/\\]([^/\\]*)$') { $Matches[1] } else { $word }
-
-    try {
-        $items = Get-ChildItem -Path $basePath -Filter "$filter*" -ErrorAction Stop |
-                 Sort-Object { $_.PSIsContainer } -Descending |
-                 Sort-Object Name
-
-        if ($items.Count -gt 0) {
-            Write-Host ""
-            foreach ($item in $items) {
-                if ($item.PSIsContainer) {
-                    $sizeStr = "<DIR> "
-                    $color   = [ConsoleColor]::Cyan
-                } else {
-                    $bytes   = $item.Length
-                    $sizeStr = if ($bytes -ge 1MB)  { "{0,7:N1} MB" -f ($bytes/1MB) }
-                               elseif ($bytes -ge 1KB) { "{0,7:N1} KB" -f ($bytes/1KB) }
-                               else                    { "{0,7} B"    -f $bytes }
-                    $color   = switch ($item.Extension.ToLower()) {
-                        { $_ -in '.ts','.js','.tsx','.jsx' } { [ConsoleColor]::Yellow }
-                        { $_ -in '.json','.yaml','.yml'    } { [ConsoleColor]::DarkYellow }
-                        { $_ -in '.md','.txt','.log'       } { [ConsoleColor]::Gray }
-                        { $_ -in '.ps1','.psm1','.psd1'    } { [ConsoleColor]::Blue }
-                        { $_ -in '.sql'                    } { [ConsoleColor]::Magenta }
-                        default                              { [ConsoleColor]::White }
-                    }
-                }
-                $modTime = $item.LastWriteTime.ToString("yyyy-MM-dd HH:mm")
-                Write-Host ("  {0,-9}  {1}  " -f $sizeStr, $modTime) -NoNewline -ForegroundColor DarkGray
-                Write-Host $item.Name -ForegroundColor $color
-            }
-            Write-Host ""
-        }
-    } catch { }
-
-    [Microsoft.PowerShell.PSConsoleReadLine]::MenuComplete($key, $arg)
-}
-Set-PSReadLineKeyHandler -Key Tab       -ScriptBlock { Show-EnhancedCompletion $args[0] $args[1] }
+Set-PSReadLineKeyHandler -Key Tab       -Function MenuComplete
 Set-PSReadLineKeyHandler -Key Shift+Tab -Function MenuComplete
-#endregion
 Set-PSReadLineKeyHandler -Key End              -Function AcceptSuggestion
 Set-PSReadLineKeyHandler -Key Ctrl+RightArrow  -Function AcceptNextSuggestionWord
 Set-PSReadLineKeyHandler -Key F2               -Function SwitchPredictionView
@@ -934,6 +886,207 @@ Set-Alias -Name le -Value load-env
 #region VS Code shortcuts
 function c.   { code . }
 function c    { if ($Args.Count -eq 0) { code . } else { code @Args } }
+#endregion
+
+#region Smart Argument Completers
+
+# ── Git ────────────────────────────────────────────────────────────────────────
+Register-ArgumentCompleter -Native -CommandName git -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $elements = $commandAst.CommandElements
+    $sub = if ($elements.Count -ge 2) { $elements[1].ToString() } else { '' }
+
+    if ($elements.Count -le 2) {
+        @('add','bisect','branch','checkout','cherry-pick','clean','clone',
+          'commit','diff','fetch','init','log','merge','mv','pull','push',
+          'rebase','remote','reset','restore','revert','rm','show','stash',
+          'status','switch','tag') |
+        Where-Object { $_ -like "$wordToComplete*" } |
+        ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        return
+    }
+
+    switch ($sub) {
+        { $_ -in 'checkout','switch','merge','rebase','diff','cherry-pick' } {
+            git branch --all 2>$null |
+                ForEach-Object { $_.Trim(' *').Replace('remotes/','') } |
+                Where-Object { $_ -like "$wordToComplete*" -and $_ -notmatch '->' } |
+                Select-Object -Unique |
+                ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+        'stash' {
+            @('push','pop','list','drop','apply','clear','show') |
+            Where-Object { $_ -like "$wordToComplete*" } |
+            ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+        'remote' {
+            @('add','remove','rename','set-url','get-url','-v','show','prune') |
+            Where-Object { $_ -like "$wordToComplete*" } |
+            ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+        'commit' {
+            @('-m','--amend','-a','--no-verify','--allow-empty','-v','--fixup') |
+            Where-Object { $_ -like "$wordToComplete*" } |
+            ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+        'push' {
+            @('origin','--force','--force-with-lease','--tags','-u','--set-upstream') |
+            Where-Object { $_ -like "$wordToComplete*" } |
+            ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+        'log' {
+            @('--oneline','--graph','--decorate','-p','--stat','--all','-n','--follow') |
+            Where-Object { $_ -like "$wordToComplete*" } |
+            ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+        'branch' {
+            @('-d','-D','-m','-r','-a','--list','--merged','--no-merged') |
+            Where-Object { $_ -like "$wordToComplete*" } |
+            ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+    }
+}
+
+# ── Docker ─────────────────────────────────────────────────────────────────────
+Register-ArgumentCompleter -Native -CommandName docker -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $elements = $commandAst.CommandElements
+    $sub  = if ($elements.Count -ge 2) { $elements[1].ToString() } else { '' }
+    $sub2 = if ($elements.Count -ge 3) { $elements[2].ToString() } else { '' }
+
+    if ($elements.Count -le 2) {
+        @('build','compose','exec','images','inspect','kill','logs','network',
+          'ps','pull','push','rm','rmi','run','start','stats','stop',
+          'system','tag','volume') |
+        Where-Object { $_ -like "$wordToComplete*" } |
+        ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        return
+    }
+
+    switch ($sub) {
+        { $_ -in 'exec','logs','stop','start','rm','kill','inspect','stats','restart' } {
+            docker ps --format '{{.Names}}' 2>$null |
+                Where-Object { $_ -like "$wordToComplete*" } |
+                ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+        'compose' {
+            if ($elements.Count -le 3) {
+                @('up','down','logs','ps','build','restart','exec','pull','push','run','stop','start','watch') |
+                Where-Object { $_ -like "$wordToComplete*" } |
+                ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            }
+        }
+        'rmi' {
+            docker images --format '{{.Repository}}:{{.Tag}}' 2>$null |
+                Where-Object { $_ -like "$wordToComplete*" } |
+                ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+        'network' {
+            @('ls','create','rm','inspect','connect','disconnect','prune') |
+            Where-Object { $_ -like "$wordToComplete*" } |
+            ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+        'system' {
+            @('prune','df','info','events') |
+            Where-Object { $_ -like "$wordToComplete*" } |
+            ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+    }
+}
+
+# ── Yarn ───────────────────────────────────────────────────────────────────────
+Register-ArgumentCompleter -Native -CommandName yarn -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $elements = $commandAst.CommandElements
+    if ($elements.Count -gt 2) { return }
+
+    $cmds = @('install','add','remove','upgrade','up','run','build','test','dev',
+              'start','workspace','workspaces','info','list','link','unlink',
+              'pack','publish','cache','config','init','outdated','why','dlx')
+    $scripts = @()
+    if (Test-Path 'package.json') {
+        try { $scripts = (Get-Content 'package.json' -Raw | ConvertFrom-Json).scripts.PSObject.Properties.Name } catch {}
+    }
+    ($cmds + $scripts) | Sort-Object -Unique |
+        Where-Object { $_ -like "$wordToComplete*" } |
+        ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+}
+
+# ── npm ────────────────────────────────────────────────────────────────────────
+Register-ArgumentCompleter -Native -CommandName npm -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $elements = $commandAst.CommandElements
+    if ($elements.Count -gt 2) { return }
+
+    $cmds = @('install','i','uninstall','update','run','test','start','build',
+              'publish','pack','audit','outdated','list','link','unlink',
+              'cache','config','init','exec','ci','version','dedupe')
+    $scripts = @()
+    if (Test-Path 'package.json') {
+        try { $scripts = (Get-Content 'package.json' -Raw | ConvertFrom-Json).scripts.PSObject.Properties.Name } catch {}
+    }
+    ($cmds + $scripts) | Sort-Object -Unique |
+        Where-Object { $_ -like "$wordToComplete*" } |
+        ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+}
+
+# ── pnpm ───────────────────────────────────────────────────────────────────────
+Register-ArgumentCompleter -Native -CommandName pnpm -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $elements = $commandAst.CommandElements
+    if ($elements.Count -gt 2) { return }
+
+    $cmds = @('install','add','remove','update','run','build','test','dev',
+              'start','publish','pack','exec','dlx','list','why','store',
+              'recursive','--filter','workspace')
+    $scripts = @()
+    if (Test-Path 'package.json') {
+        try { $scripts = (Get-Content 'package.json' -Raw | ConvertFrom-Json).scripts.PSObject.Properties.Name } catch {}
+    }
+    ($cmds + $scripts) | Sort-Object -Unique |
+        Where-Object { $_ -like "$wordToComplete*" } |
+        ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+}
+
+# ── gh (GitHub CLI) ────────────────────────────────────────────────────────────
+Register-ArgumentCompleter -Native -CommandName gh -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $elements = $commandAst.CommandElements
+    $sub = if ($elements.Count -ge 2) { $elements[1].ToString() } else { '' }
+
+    if ($elements.Count -le 2) {
+        @('pr','repo','issue','release','auth','workflow','run','secret','gist','label','api','codespace') |
+        Where-Object { $_ -like "$wordToComplete*" } |
+        ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        return
+    }
+
+    $subMap = @{
+        'pr'       = @('create','list','view','checkout','merge','close','review','status','diff','comment')
+        'repo'     = @('create','clone','fork','view','list','delete','archive','rename','sync')
+        'issue'    = @('create','list','view','close','reopen','comment','edit','pin','transfer')
+        'release'  = @('create','list','view','delete','upload','download')
+        'workflow' = @('list','run','view','enable','disable')
+        'auth'     = @('login','logout','status','refresh','token')
+        'secret'   = @('list','set','delete')
+    }
+    if ($subMap.ContainsKey($sub)) {
+        $subMap[$sub] |
+            Where-Object { $_ -like "$wordToComplete*" } |
+            ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+    }
+}
+
+# ── code (VS Code) ─────────────────────────────────────────────────────────────
+Register-ArgumentCompleter -Native -CommandName code -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    @('--install-extension','--uninstall-extension','--list-extensions',
+      '--disable-extensions','--new-window','-n','--reuse-window','-r',
+      '--goto','-g','--diff','--wait','-w','--verbose','--log','--status') |
+    Where-Object { $_ -like "$wordToComplete*" } |
+    ForEach-Object { [CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+}
+
 #endregion
 
 #region Auto-ls after cd
